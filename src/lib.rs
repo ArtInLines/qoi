@@ -99,6 +99,7 @@ impl From<ColorSpace> for u8 {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub struct Header {
     pub width: u32,
     pub height: u32,
@@ -138,12 +139,12 @@ impl Header {
     }
 }
 
-fn open_file<P>(filepath: P) -> Result<File, IOErr>
+pub fn open_file<P>(filepath: P) -> Result<File, IOErr>
 where
     P: AsRef<Path>,
 {
     let res = if filepath.as_ref().exists() {
-        File::options().write(true).open(filepath)?
+        File::options().read(true).write(true).open(filepath)?
     } else {
         File::create(filepath)?
     };
