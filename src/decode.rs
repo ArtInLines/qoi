@@ -58,7 +58,10 @@ impl fmt::Debug for DecodeError {
                 write!(f, "Invalid color space: {}. Expected 0 or 1, where 0 = sRGB with linear alpha, and 1 = all channels linear.", received_colorspace)
             }
             Self::MissingHeader => {
-                write!(f, "Not enough bytes were received to contain ")
+                write!(
+                    f,
+                    "Not enough bytes were received to contain the file's Header."
+                )
             }
             Self::MissingPixels {
                 expected_size,
@@ -112,7 +115,7 @@ fn decode_pixel(
     buf_idx: &mut usize,
     px_idx: &mut usize,
 ) -> Result<bool, DecodeError> {
-    Ok(false)
+    Ok(true)
 }
 
 pub fn decode(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeError> {
