@@ -62,12 +62,12 @@ pub trait SliceIter<T: Copy>: BufIterType<T> {
     }
 
     fn look_one(&self) -> Option<&T> {
-        self.buf().get(self.idx() + 1)
+        self.buf().get(self.idx())
     }
 
     fn step_one(&mut self) -> Option<&T> {
         let (idx, buf, _) = self.half_mut();
-        let res = buf.get(*idx + 1);
+        let res = buf.get(*idx);
         if res.is_some() {
             *idx += 1;
         }
@@ -130,12 +130,12 @@ pub trait SliceIterMut<T: Copy>: SliceIter<T> + MutBufIterType<T> {
 
     fn look_one_mut(&mut self) -> Option<&mut T> {
         let (idx, buf, _) = self.full_mut();
-        buf.get_mut(*idx + 1)
+        buf.get_mut(*idx)
     }
 
     fn step_one_mut(&mut self) -> Option<&mut T> {
         let (idx, buf, _) = self.full_mut();
-        let res = buf.get_mut(*idx + 1);
+        let res = buf.get_mut(*idx);
         if res.is_some() {
             *idx += 1;
         }

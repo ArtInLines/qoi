@@ -118,10 +118,6 @@ fn decode_pixel<'a>(
     buffer: &mut BufIter<'a, u8>,
     pixels: &mut MutBufIter<'a, u8>,
 ) -> Result<bool, DecodeError> {
-    let mut b = buffer.clone();
-    b.step_one();
-    dbg!(b);
-    let pixels = dbg!(pixels);
     match buffer.step_one() {
         None => Err(DecodeError::MissingPixels {
             expected_size: header.pixel_amount() * header.bytes_per_pixel(),
@@ -134,7 +130,6 @@ fn decode_pixel<'a>(
                     received_size: buffer.idx(),
                 }),
                 Some(bytes) => {
-                    let bytes = dbg!(bytes);
                     pixels.copy_from_slice(bytes, 3, true);
                     Ok(false)
                 }
@@ -145,6 +140,7 @@ fn decode_pixel<'a>(
                     received_size: buffer.idx(),
                 }),
                 Some(bytes) => {
+                    dbg!(byte);
                     let bytes = dbg!(bytes);
                     pixels.copy_from_slice(bytes, 4, true);
                     Ok(false)
