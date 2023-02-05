@@ -1,3 +1,4 @@
+mod buf_iter;
 use decode::*;
 use encode::*;
 use std::{
@@ -8,6 +9,7 @@ use std::{
 
 pub mod decode;
 pub mod encode;
+pub use buf_iter::*;
 
 pub const MAGIC: [u8; 4] = [b'q', b'o', b'i', b'f'];
 pub const STREAM_END_SIZE: usize = 8;

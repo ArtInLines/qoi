@@ -55,54 +55,51 @@ impl From<std::io::Error> for EncodeError {
 
 use EncodeError::*;
 
-fn encode_header(header: &Header, buffer: &mut [u8]) -> Result<usize, EncodeError> {
+fn encode_header<'a>(
+    header: &Header,
+    buffer: &mut MutBufIter<'a, u8>,
+) -> Result<usize, EncodeError> {
     if buffer.len() < HEADER_SIZE {
         return Err(EncodeError::BufferTooSmall {
             expected_size: HEADER_SIZE,
             received_size: buffer.len(),
         });
     }
-    buffer[0..4].copy_from_slice(&MAGIC);
-    buffer[4..8].copy_from_slice(&header.width.to_be_bytes());
-    buffer[8..12].copy_from_slice(&header.height.to_be_bytes());
-    buffer[12..HEADER_SIZE].copy_from_slice(&[header.channels.into(), header.colorspace.into()]);
+    buffer.copy_from_slice(&MAGIC, 4, true);
+    buffer.copy_from_slice(&header.width.to_be_bytes(), 4, true);
+    buffer.copy_from_slice(&header.height.to_be_bytes(), 4, true);
+    buffer.copy_from_slice(&[header.channels.into(), header.colorspace.into()], 2, true);
     Ok(HEADER_SIZE)
 }
 
-fn encode_pixel(
+fn encode_pixel<'a>(
     header: &Header,
-    pixels: &[u8],
-    buffer: &mut [u8],
-    px_idx: &mut usize,
-    buf_idx: &mut usize,
+    pixels: &mut BufIter<'a, u8>,
+    buffer: &mut MutBufIter<'a, u8>,
 ) -> Result<(), EncodeError> {
     match header.channels {
         ColorChannel::RGB => {
-            buffer[*buf_idx..*buf_idx + 1].copy_from_slice(&OP_RGB.to_be_bytes());
-            match pixels.get(..3) {
+            buffer.copy_from_slice(&OP_RGB.to_be_bytes(), 1, true);
+            match pixels.step_forward(3) {
                 None => Err(EncodeError::MissingPixels {
                     expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                    received_size: *px_idx + pixels.len(),
+                    received_size: pixels.idx() + pixels.len(),
                 }),
                 Some(pixel) => {
-                    buffer[*buf_idx + 1..*buf_idx + 4].copy_from_slice(pixel);
-                    *px_idx += 3;
-                    *buf_idx += 4;
+                    buffer.copy_from_slice(pixel, 3, true);
                     Ok(())
                 }
             }
         }
         ColorChannel::RGBA => {
-            buffer[*buf_idx..*buf_idx + 1].copy_from_slice(&OP_RGBA.to_be_bytes());
-            match pixels.get(..4) {
+            buffer.copy_from_slice(&OP_RGBA.to_be_bytes(), 1, true);
+            match pixels.step_forward(4) {
                 None => Err(EncodeError::MissingPixels {
                     expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                    received_size: *px_idx + pixels.len(),
+                    received_size: pixels.idx() + pixels.len(),
                 }),
                 Some(pixel) => {
-                    buffer[*buf_idx + 1..*buf_idx + 5].copy_from_slice(pixel);
-                    *px_idx += 4;
-                    *buf_idx += 5;
+                    buffer.copy_from_slice(pixel, 4, true);
                     Ok(())
                 }
             }
@@ -110,26 +107,25 @@ fn encode_pixel(
     }
 }
 
-pub fn encode(header: &Header, pixels: &[u8], buffer: &mut [u8]) -> Result<usize, EncodeError> {
+pub fn encode<'a>(header: &Header, pixels: &[u8], buffer: &mut [u8]) -> Result<usize, EncodeError> {
     let pixels_size = header.pixel_amount() * header.bytes_per_pixel();
-    let pixels = match pixels.get(..pixels_size) {
+    let mut pixels = match BufIter::from(pixels, ..pixels_size) {
         None => Err(MissingPixels {
             expected_size: pixels_size,
             received_size: pixels.len(),
         }),
         Some(pixels) => Ok(pixels),
     }?;
+    let mut buffer = MutBufIter::new(buffer);
 
-    let mut buf_idx = encode_header(header, buffer)?;
-    let mut px_idx = 0;
-    while px_idx < pixels_size {
-        encode_pixel(header, &pixels[px_idx..], buffer, &mut px_idx, &mut buf_idx)?;
+    encode_header(header, &mut buffer)?;
+    while pixels.idx() < pixels_size {
+        encode_pixel(header, &mut pixels, &mut buffer)?;
     }
 
-    buffer[buf_idx..buf_idx + STREAM_END_SIZE].copy_from_slice(&STREAM_END);
-    buf_idx += STREAM_END_SIZE;
+    buffer.copy_from_slice(&STREAM_END, STREAM_END_SIZE, true);
 
-    Ok(buf_idx)
+    Ok(buffer.idx())
 }
 
 pub fn encode_allocated(header: &Header, pixels: &[u8]) -> Result<Vec<u8>, EncodeError> {

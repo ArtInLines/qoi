@@ -113,81 +113,77 @@ fn decode_header(buffer: &[u8]) -> Result<Header, DecodeError> {
 }
 
 // Return value indicates whether the decoding process is done
-fn decode_pixel(
+fn decode_pixel<'a>(
     header: &Header,
-    buffer: &[u8],
-    pixels: &mut [u8],
-    buf_idx: &mut usize,
-    px_idx: &mut usize,
+    buffer: &mut BufIter<'a, u8>,
+    pixels: &mut MutBufIter<'a, u8>,
 ) -> Result<bool, DecodeError> {
-    match buffer.get(*buf_idx) {
+    let mut b = buffer.clone();
+    b.step_one();
+    dbg!(b);
+    let pixels = dbg!(pixels);
+    match buffer.step_one() {
         None => Err(DecodeError::MissingPixels {
             expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-            received_size: *buf_idx,
+            received_size: buffer.idx(),
         }),
-        Some(&byte) => {
-            *buf_idx += 1;
-            match byte {
-                OP_RGB => match buffer.get(*buf_idx..*buf_idx + 3) {
-                    None => Err(DecodeError::MissingPixels {
-                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                        received_size: *buf_idx,
-                    }),
-                    Some(bytes) => {
-                        pixels[*px_idx..*px_idx + 3].copy_from_slice(bytes);
-                        *px_idx += 3;
-                        *buf_idx += 3;
-                        Ok(false)
+        Some(&byte) => match byte {
+            OP_RGB => match buffer.step_forward(3) {
+                None => Err(DecodeError::MissingPixels {
+                    expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                    received_size: buffer.idx(),
+                }),
+                Some(bytes) => {
+                    let bytes = dbg!(bytes);
+                    pixels.copy_from_slice(bytes, 3, true);
+                    Ok(false)
+                }
+            },
+            OP_RGBA => match buffer.step_forward(4) {
+                None => Err(DecodeError::MissingPixels {
+                    expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                    received_size: buffer.idx(),
+                }),
+                Some(bytes) => {
+                    let bytes = dbg!(bytes);
+                    pixels.copy_from_slice(bytes, 4, true);
+                    Ok(false)
+                }
+            },
+            _ => match buffer.slide(1, STREAM_END_SIZE) {
+                None => Err(DecodeError::NotImplemented),
+                Some(bytes) => {
+                    if bytes
+                        .into_iter()
+                        .enumerate()
+                        .all(|(i, &x)| x == STREAM_END[i])
+                    {
+                        Ok(true)
+                    } else {
+                        Err(DecodeError::NotImplemented)
                     }
-                },
-                OP_RGBA => match buffer.get(*buf_idx..*buf_idx + 4) {
-                    None => Err(DecodeError::MissingPixels {
-                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                        received_size: *buf_idx,
-                    }),
-                    Some(bytes) => {
-                        pixels[*px_idx..*px_idx + 4].copy_from_slice(bytes);
-                        *px_idx += 4;
-                        *buf_idx += 4;
-                        Ok(false)
-                    }
-                },
-                _ => match buffer.get(*buf_idx - 1..*buf_idx + STREAM_END_SIZE - 1) {
-                    None => Err(DecodeError::NotImplemented),
-                    Some(bytes) => {
-                        if bytes
-                            .into_iter()
-                            .enumerate()
-                            .all(|(i, &x)| x == STREAM_END[i])
-                        {
-                            Ok(true)
-                        } else {
-                            Err(DecodeError::NotImplemented)
-                        }
-                    }
-                },
-            }
-        }
+                }
+            },
+        },
     }
 }
 
-pub fn decode(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeError> {
+pub fn decode<'a>(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeError> {
     let header = decode_header(buffer)?;
     let pixels_size = header.pixel_amount() * header.bytes_per_pixel();
 
-    let mut pixels = match pixels.get_mut(..pixels_size) {
+    let mut pixels = match MutBufIter::from(pixels, ..pixels_size) {
         None => Err(DecodeError::PixelBufferTooSmall {
             expected_size: pixels_size,
             received_size: pixels.len(),
         }),
         Some(pixels) => Ok(pixels),
     }?;
+    let mut buffer = BufIter::from(buffer, HEADER_SIZE.into()..).unwrap();
 
     let mut done = false;
-    let mut buf_idx = HEADER_SIZE;
-    let mut px_idx = 0;
     while !done {
-        done = decode_pixel(&header, buffer, &mut pixels, &mut buf_idx, &mut px_idx)?;
+        done = decode_pixel(&header, &mut buffer, &mut pixels)?;
     }
 
     Ok(header)
