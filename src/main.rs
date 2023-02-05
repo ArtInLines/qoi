@@ -17,7 +17,7 @@ fn main() {
     file.read_to_end(&mut buf).unwrap();
     dbg!(buf);
 
-    let mut pixels = Vec::<u8>::new();
+    let mut pixels = vec![0; 100];
     let header = read(fpath, &mut pixels).unwrap();
     dbg!(header, pixels);
 }

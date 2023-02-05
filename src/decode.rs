@@ -39,6 +39,8 @@ pub enum DecodeError {
     },
 
     IOError(std::io::Error),
+
+    NotImplemented,
 }
 
 impl fmt::Debug for DecodeError {
@@ -83,6 +85,9 @@ impl fmt::Debug for DecodeError {
             Self::IOError(err) => {
                 write!(f, "IO Error: {}", err)
             }
+            Self::NotImplemented => {
+                write!(f, "Not yet implemented.")
+            }
         }
     }
 }
@@ -115,16 +120,65 @@ fn decode_pixel(
     buf_idx: &mut usize,
     px_idx: &mut usize,
 ) -> Result<bool, DecodeError> {
-    Ok(true)
+    match buffer.get(*buf_idx) {
+        None => Err(DecodeError::MissingPixels {
+            expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+            received_size: *buf_idx,
+        }),
+        Some(&byte) => {
+            *buf_idx += 1;
+            match byte {
+                OP_RGB => match buffer.get(*buf_idx..*buf_idx + 3) {
+                    None => Err(DecodeError::MissingPixels {
+                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                        received_size: *buf_idx,
+                    }),
+                    Some(bytes) => {
+                        pixels[*px_idx..*px_idx + 3].copy_from_slice(bytes);
+                        *px_idx += 3;
+                        *buf_idx += 3;
+                        Ok(false)
+                    }
+                },
+                OP_RGBA => match buffer.get(*buf_idx..*buf_idx + 4) {
+                    None => Err(DecodeError::MissingPixels {
+                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                        received_size: *buf_idx,
+                    }),
+                    Some(bytes) => {
+                        pixels[*px_idx..*px_idx + 4].copy_from_slice(bytes);
+                        *px_idx += 4;
+                        *buf_idx += 4;
+                        Ok(false)
+                    }
+                },
+                _ => match buffer.get(*buf_idx - 1..*buf_idx + STREAM_END_SIZE - 1) {
+                    None => Err(DecodeError::NotImplemented),
+                    Some(bytes) => {
+                        if bytes
+                            .into_iter()
+                            .enumerate()
+                            .all(|(i, &x)| x == STREAM_END[i])
+                        {
+                            Ok(true)
+                        } else {
+                            Err(DecodeError::NotImplemented)
+                        }
+                    }
+                },
+            }
+        }
+    }
 }
 
 pub fn decode(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeError> {
     let header = decode_header(buffer)?;
     let pixels_size = header.pixel_amount() * header.bytes_per_pixel();
+
     let mut pixels = match pixels.get_mut(..pixels_size) {
         None => Err(DecodeError::PixelBufferTooSmall {
             expected_size: pixels_size,
-            received_size: buffer.len(),
+            received_size: pixels.len(),
         }),
         Some(pixels) => Ok(pixels),
     }?;

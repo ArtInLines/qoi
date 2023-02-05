@@ -65,7 +65,7 @@ fn encode_header(header: &Header, buffer: &mut [u8]) -> Result<usize, EncodeErro
     buffer[0..4].copy_from_slice(&MAGIC);
     buffer[4..8].copy_from_slice(&header.width.to_be_bytes());
     buffer[8..12].copy_from_slice(&header.height.to_be_bytes());
-    buffer[12..HEADER_SIZE].copy_from_slice(&[header.channels as u8, header.colorspace as u8]);
+    buffer[12..HEADER_SIZE].copy_from_slice(&[header.channels.into(), header.colorspace.into()]);
     Ok(HEADER_SIZE)
 }
 

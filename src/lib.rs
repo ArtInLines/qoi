@@ -9,13 +9,13 @@ use std::{
 pub mod decode;
 pub mod encode;
 
-pub static MAGIC: [u8; 4] = [b'q', b'o', b'i', b'f'];
+pub const MAGIC: [u8; 4] = [b'q', b'o', b'i', b'f'];
 pub const STREAM_END_SIZE: usize = 8;
-pub static STREAM_END: [u8; STREAM_END_SIZE] = [0, 0, 0, 0, 0, 0, 0, 1];
-pub static RUN: [u8; 64] = [0 as u8; 64];
-pub static OP_RGB: u8 = 0b11111110;
-pub static OP_RGBA: u8 = 0b11111111;
-pub static HEADER_SIZE: usize = 14;
+pub const STREAM_END: [u8; STREAM_END_SIZE] = [0, 0, 0, 0, 0, 0, 0, 1];
+pub const RUN: [u8; 64] = [0 as u8; 64];
+pub const OP_RGB: u8 = 0b11111110;
+pub const OP_RGBA: u8 = 0b11111111;
+pub const HEADER_SIZE: usize = 14;
 
 pub trait Pixel {
     fn rgb(&self) -> [u8; 3];
@@ -157,7 +157,7 @@ where
 {
     let mut file = open_file(filepath)?;
     let mut bytes = Vec::<u8>::new();
-    file.read(&mut bytes)?;
+    file.read_to_end(&mut bytes)?;
     decode(&mut bytes, pixels)
 }
 
