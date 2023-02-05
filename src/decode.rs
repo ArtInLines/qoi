@@ -113,55 +113,59 @@ fn decode_header(buffer: &[u8]) -> Result<Header, DecodeError> {
 }
 
 // Return value indicates whether the decoding process is done
-fn decode_pixel<'a>(
+fn decode_pixels<'a>(
     header: &Header,
     buffer: &mut BufIter<'a, u8>,
     pixels: &mut MutBufIter<'a, u8>,
-) -> Result<bool, DecodeError> {
-    match buffer.step_one() {
-        None => Err(DecodeError::MissingPixels {
-            expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-            received_size: buffer.idx(),
-        }),
-        Some(&byte) => match byte {
-            OP_RGB => match buffer.step_forward(3) {
-                None => Err(DecodeError::MissingPixels {
-                    expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                    received_size: buffer.idx(),
-                }),
-                Some(bytes) => {
-                    pixels.copy_from_slice(bytes, 3, true);
-                    Ok(false)
-                }
-            },
-            OP_RGBA => match buffer.step_forward(4) {
-                None => Err(DecodeError::MissingPixels {
-                    expected_size: header.pixel_amount() * header.bytes_per_pixel(),
-                    received_size: buffer.idx(),
-                }),
-                Some(bytes) => {
-                    dbg!(byte);
-                    let bytes = dbg!(bytes);
-                    pixels.copy_from_slice(bytes, 4, true);
-                    Ok(false)
-                }
-            },
-            _ => match buffer.slide(1, STREAM_END_SIZE) {
-                None => Err(DecodeError::NotImplemented),
-                Some(bytes) => {
-                    if bytes
-                        .into_iter()
-                        .enumerate()
-                        .all(|(i, &x)| x == STREAM_END[i])
-                    {
-                        Ok(true)
-                    } else {
-                        Err(DecodeError::NotImplemented)
+) -> Result<(), DecodeError> {
+    let mut done = false;
+    while !done {
+        done = match buffer.step_one() {
+            None => Err(DecodeError::MissingPixels {
+                expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                received_size: buffer.idx(),
+            }),
+            Some(&byte) => match byte {
+                OP_RGB => match buffer.step_forward(3) {
+                    None => Err(DecodeError::MissingPixels {
+                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                        received_size: buffer.idx(),
+                    }),
+                    Some(bytes) => {
+                        pixels.copy_from_slice(bytes, 3, true);
+                        Ok(false)
                     }
-                }
+                },
+                OP_RGBA => match buffer.step_forward(4) {
+                    None => Err(DecodeError::MissingPixels {
+                        expected_size: header.pixel_amount() * header.bytes_per_pixel(),
+                        received_size: buffer.idx(),
+                    }),
+                    Some(bytes) => {
+                        dbg!(byte);
+                        let bytes = dbg!(bytes);
+                        pixels.copy_from_slice(bytes, 4, true);
+                        Ok(false)
+                    }
+                },
+                _ => match buffer.slide(1, STREAM_END_SIZE) {
+                    None => Err(DecodeError::NotImplemented),
+                    Some(bytes) => {
+                        if bytes
+                            .into_iter()
+                            .enumerate()
+                            .all(|(i, &x)| x == STREAM_END[i])
+                        {
+                            Ok(true)
+                        } else {
+                            Err(DecodeError::NotImplemented)
+                        }
+                    }
+                },
             },
-        },
+        }?;
     }
+    Ok(())
 }
 
 pub fn decode<'a>(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeError> {
@@ -177,10 +181,24 @@ pub fn decode<'a>(buffer: &[u8], pixels: &mut [u8]) -> Result<Header, DecodeErro
     }?;
     let mut buffer = BufIter::from(buffer, HEADER_SIZE.into()..).unwrap();
 
-    let mut done = false;
-    while !done {
-        done = decode_pixel(&header, &mut buffer, &mut pixels)?;
-    }
-
+    decode_pixels(&header, &mut buffer, &mut pixels)?;
     Ok(header)
+}
+
+pub fn decode_allocated<'a>(buffer: &[u8]) -> Result<(Header, Vec<u8>), DecodeError> {
+    let header = decode_header(buffer)?;
+    let pixels_size = header.pixel_amount() * header.bytes_per_pixel();
+
+    let mut pixels_vec = vec![0; pixels_size];
+    let mut pixels = match MutBufIter::from(&mut pixels_vec, ..pixels_size) {
+        None => Err(DecodeError::PixelBufferTooSmall {
+            expected_size: pixels_size,
+            received_size: pixels_vec.len(),
+        }),
+        Some(pixels) => Ok(pixels),
+    }?;
+    let mut buffer = BufIter::from(buffer, HEADER_SIZE.into()..).unwrap();
+
+    decode_pixels(&header, &mut buffer, &mut pixels)?;
+    Ok((header, pixels_vec))
 }

@@ -153,14 +153,14 @@ where
     Ok(res)
 }
 
-pub fn read<P>(filepath: P, pixels: &mut [u8]) -> Result<Header, DecodeError>
+pub fn read<P>(filepath: P) -> Result<(Header, Vec<u8>), DecodeError>
 where
     P: AsRef<Path>,
 {
     let mut file = open_file(filepath)?;
     let mut bytes = Vec::<u8>::new();
     file.read_to_end(&mut bytes)?;
-    decode(&mut bytes, pixels)
+    decode_allocated(&mut bytes)
 }
 
 pub fn write<P>(filepath: P, header: &Header, pixels: &mut [u8]) -> Result<usize, EncodeError>
