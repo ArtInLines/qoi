@@ -1,4 +1,5 @@
 mod buf_iter;
+mod util;
 use decode::*;
 use encode::*;
 use std::{
@@ -10,6 +11,7 @@ use std::{
 pub mod decode;
 pub mod encode;
 pub use buf_iter::*;
+pub use util::*;
 
 pub const MAGIC: [u8; 4] = [b'q', b'o', b'i', b'f'];
 pub const STREAM_END_SIZE: usize = 8;
@@ -18,128 +20,6 @@ pub const RUN: [u8; 64] = [0 as u8; 64];
 pub const OP_RGB: u8 = 0b11111110;
 pub const OP_RGBA: u8 = 0b11111111;
 pub const HEADER_SIZE: usize = 14;
-
-pub trait Pixel {
-    fn rgb(&self) -> [u8; 3];
-
-    fn rgba(&self) -> [u8; 4];
-
-    fn r(&self) -> u8;
-
-    fn g(&self) -> u8;
-
-    fn b(&self) -> u8;
-
-    fn a(&self) -> u8;
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ColorChannel {
-    RGB,
-    RGBA,
-}
-
-impl From<u8> for ColorChannel {
-    fn from(value: u8) -> Self {
-        match value {
-            3 => ColorChannel::RGB,
-            4 => ColorChannel::RGBA,
-            _ => panic!("Invalid ColorChannel value"),
-        }
-    }
-}
-
-impl From<ColorChannel> for u8 {
-    fn from(value: ColorChannel) -> Self {
-        match value {
-            ColorChannel::RGB => 3,
-            ColorChannel::RGBA => 4,
-        }
-    }
-}
-
-impl From<ColorChannel> for u32 {
-    fn from(value: ColorChannel) -> Self {
-        match value {
-            ColorChannel::RGB => 3,
-            ColorChannel::RGBA => 4,
-        }
-    }
-}
-
-impl From<ColorChannel> for usize {
-    fn from(value: ColorChannel) -> Self {
-        match value {
-            ColorChannel::RGB => 3,
-            ColorChannel::RGBA => 4,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub enum ColorSpace {
-    SRGB,
-    LINEAR,
-}
-
-impl From<u8> for ColorSpace {
-    fn from(value: u8) -> Self {
-        match value {
-            0 => ColorSpace::SRGB,
-            1 => ColorSpace::LINEAR,
-            _ => panic!("Invalid ColorSpace value"),
-        }
-    }
-}
-
-impl From<ColorSpace> for u8 {
-    fn from(value: ColorSpace) -> Self {
-        match value {
-            ColorSpace::SRGB => 0,
-            ColorSpace::LINEAR => 1,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy)]
-pub struct Header {
-    pub width: u32,
-    pub height: u32,
-    pub channels: ColorChannel,
-    pub colorspace: ColorSpace,
-}
-
-impl Header {
-    pub fn new(width: u32, height: u32, channels: ColorChannel, colorspace: ColorSpace) -> Self {
-        Header {
-            width,
-            height,
-            channels,
-            colorspace,
-        }
-    }
-
-    pub fn pixel_amount(&self) -> usize {
-        (self.width * self.height) as usize
-    }
-
-    pub fn max_bytes_per_pixel(&self) -> usize {
-        self.bytes_per_pixel() + 1
-    }
-
-    pub fn bytes_per_pixel(&self) -> usize {
-        match self.channels {
-            ColorChannel::RGB => 3,
-            ColorChannel::RGBA => 4,
-        }
-    }
-
-    pub fn max_size(&self) -> usize {
-        self.pixel_amount() * self.max_bytes_per_pixel() * (self.channels as usize + 1)
-            + HEADER_SIZE
-            + STREAM_END_SIZE
-    }
-}
 
 pub fn open_file<P>(filepath: P) -> Result<File, IOErr>
 where
