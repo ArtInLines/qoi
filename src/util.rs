@@ -9,8 +9,12 @@ pub struct Pixel {
 }
 
 impl Pixel {
-    pub fn pixel_hash(&self) -> u8 {
-        (self.r * 3 + self.g * 5 + self.b * 7 + self.a * 11) % 64
+    pub fn pixel_hash(&self) -> usize {
+        let r = self.r as usize;
+        let g = self.g as usize;
+        let b = self.b as usize;
+        let a = self.a as usize;
+        (r * 3 + g * 5 + b * 7 + a * 11) % 64
     }
 
     pub const fn def() -> Self {
@@ -57,12 +61,13 @@ pub enum ColorChannel {
     RGBA,
 }
 
-impl From<u8> for ColorChannel {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for ColorChannel {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            3 => ColorChannel::RGB,
-            4 => ColorChannel::RGBA,
-            _ => panic!("Invalid ColorChannel value"),
+            3 => Ok(ColorChannel::RGB),
+            4 => Ok(ColorChannel::RGBA),
+            _ => Err(value),
         }
     }
 }
@@ -100,12 +105,13 @@ pub enum ColorSpace {
     LINEAR,
 }
 
-impl From<u8> for ColorSpace {
-    fn from(value: u8) -> Self {
+impl TryFrom<u8> for ColorSpace {
+    type Error = u8;
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
-            0 => ColorSpace::SRGB,
-            1 => ColorSpace::LINEAR,
-            _ => panic!("Invalid ColorSpace value"),
+            0 => Ok(ColorSpace::SRGB),
+            1 => Ok(ColorSpace::LINEAR),
+            _ => Err(value),
         }
     }
 }

@@ -115,20 +115,20 @@ fn try_op_run(
     } else if pixel == *prev_pixel {
         *run += 1;
         if *run == 62 || is_last {
-            match buffer.step_one_mut() {
-                None => return Failure(EncodeError::buffer_too_small(header, buffer)),
-                Some(byte) => *byte = OP_RUN | (*run - 1),
-            };
+            if let None = buffer.set_next_one(OP_RUN | (*run - 1)) {
+                return Failure(EncodeError::buffer_too_small(header, buffer));
+            }
             *run = 0;
         }
         Success
     } else if *run > 0 {
-        match buffer.step_one_mut() {
-            None => return Failure(EncodeError::buffer_too_small(header, buffer)),
-            Some(byte) => *byte = OP_RUN | (*run - 1),
-        };
-        *run = 0;
-        Success
+        match buffer.set_next_one(OP_RUN | (*run - 1)) {
+            None => Failure(EncodeError::buffer_too_small(header, buffer)),
+            Some(_) => {
+                *run = 0;
+                Success
+            }
+        }
     } else {
         Invalid
     }
@@ -142,20 +142,16 @@ fn try_op_index(
     prev_arr: &mut [Pixel; PREV_ARR_SIZE],
 ) -> EncodeAttemptRes {
     if prev_arr[index] == pixel {
-        match buffer.step_one_mut() {
+        match buffer.set_next_one(OP_INDEX | index as u8) {
             None => Failure(EncodeError::buffer_too_small(header, buffer)),
-            Some(byte) => {
-                *byte = OP_INDEX | index as u8;
-                Success
-            }
+            Some(_) => Success,
         }
     } else {
-        prev_arr[index] = pixel;
         Invalid
     }
 }
 
-fn try_op_diff(
+fn try_op_diff_luma(
     header: &Header,
     pixel: Pixel,
     index: usize,
@@ -164,50 +160,60 @@ fn try_op_diff(
     prev_pixel: &Pixel,
 ) -> EncodeAttemptRes {
     if pixel.a == prev_pixel.a {
-        let dr = pixel.r.wrapping_sub(prev_arr[index].r).wrapping_add(2);
-        let dg = pixel.g.wrapping_sub(prev_arr[index].g).wrapping_add(2);
-        let db = pixel.b.wrapping_sub(prev_arr[index].b).wrapping_add(2);
+        let dr = pixel
+            .r
+            .wrapping_sub(prev_arr[index].r)
+            .wrapping_add(DIFF_BIAS);
+        let dg = pixel
+            .g
+            .wrapping_sub(prev_arr[index].g)
+            .wrapping_add(DIFF_BIAS);
+        let db = pixel
+            .b
+            .wrapping_sub(prev_arr[index].b)
+            .wrapping_add(DIFF_BIAS);
 
         if dr <= 3 && dg <= 3 && db <= 3 {
-            return match buffer.step_one_mut() {
+            return match buffer.set_next_one(OP_DIFF | (dr << 4) | (dg << 2) | (db << 0)) {
                 None => Failure(EncodeError::buffer_too_small(header, buffer)),
-                Some(byte) => {
-                    *byte = OP_DIFF | (dr << 4) | (dg << 2) | db;
-                    Success
-                }
+                Some(_) => Success,
+            };
+        }
+
+        let dg = dg.wrapping_add(LUMA_GREEN_BIAS - DIFF_BIAS);
+        let dr = dr.wrapping_sub(dg).wrapping_add(LUMA_BIAS);
+        let db = db.wrapping_sub(dg).wrapping_add(LUMA_BIAS);
+
+        if dg <= 63 && dr <= 15 && db <= 15 {
+            return match buffer.set_next(&[OP_LUMA | dg, (dr << 4) | (db << 0)]) {
+                None => Failure(EncodeError::buffer_too_small(header, buffer)),
+                Some(_) => Success,
             };
         }
     }
     Invalid
 }
 
-fn try_op_luma(
-    header: &Header,
-    pixel: Pixel,
-    index: usize,
-    buffer: &mut MutBufIter<u8>,
-    prev_arr: &[Pixel; PREV_ARR_SIZE],
-    prev_pixel: &Pixel,
-) -> EncodeAttemptRes {
-    todo!();
-    Invalid
-}
-
-fn try_op_pixel(
-    header: &Header,
-    pixel: Pixel,
-    index: usize,
-    buffer: &mut MutBufIter<u8>,
-    prev_arr: &[Pixel; PREV_ARR_SIZE],
-    prev_pixel: &Pixel,
-) -> EncodeAttemptRes {
-    todo!();
-    Invalid
+fn try_op_pixel(header: &Header, pixel: Pixel, buffer: &mut MutBufIter<u8>) -> EncodeAttemptRes {
+    match buffer.step_forward_mut(header.max_bytes_per_pixel()) {
+        None => Failure(EncodeError::buffer_too_small(header, buffer)),
+        Some(bytes) => {
+            match header.channels {
+                ColorChannel::RGB => bytes[0] = OP_RGB,
+                ColorChannel::RGBA => {
+                    bytes[0] = OP_RGBA;
+                    bytes[4] = pixel.a;
+                }
+            };
+            bytes[1..4].copy_from_slice(&[pixel.r, pixel.g, pixel.b]);
+            Success
+        }
+    }
 }
 
 fn encode_pixel<'a>(
     header: &Header,
-    pixels: &mut BufIter<'a, u8>,
+    pixels: &mut BufIter<'a, Pixel>,
     buffer: &mut MutBufIter<'a, u8>,
     prev_arr: &mut [Pixel; PREV_ARR_SIZE],
     prev_pixel: &Pixel,
@@ -215,48 +221,46 @@ fn encode_pixel<'a>(
     is_last: bool,
     is_first: bool,
 ) -> Result<Pixel, EncodeError> {
-    let pixel_size: usize = header.channels.into();
-    let pixel: Pixel = match pixels.step_forward(pixel_size) {
+    let &pixel = match pixels.step_one() {
         None => Err(MissingPixels {
-            expected_size: header.pixel_len(),
-            received_size: pixels.idx() + pixels.len(),
+            expected_size: header.pixel_amount(),
+            received_size: pixels.len(),
         }),
-        Some(pixel) => Ok(pixel.into()),
+        Some(pixel) => Ok(pixel),
     }?;
 
     let index = pixel.pixel_hash() as usize;
     let res = Ok(pixel);
-
-    match try_op_run(header, pixel, buffer, prev_pixel, run, is_last, is_first) {
+    let res = match try_op_run(header, pixel, buffer, prev_pixel, run, is_last, is_first) {
         Success => res,
         Failure(e) => Err(e),
         Invalid => match try_op_index(header, pixel, index, buffer, prev_arr) {
             Success => res,
             Failure(e) => Err(e),
-            Invalid => match try_op_diff(header, pixel, index, buffer, prev_arr, prev_pixel) {
+            Invalid => match try_op_diff_luma(header, pixel, index, buffer, prev_arr, prev_pixel) {
                 Success => res,
                 Failure(e) => Err(e),
-                Invalid => match try_op_luma(header, pixel, index, buffer, prev_arr, prev_pixel) {
+                Invalid => match try_op_pixel(header, pixel, buffer) {
                     Success => res,
                     Failure(e) => Err(e),
-                    Invalid => {
-                        match try_op_pixel(header, pixel, index, buffer, prev_arr, prev_pixel) {
-                            Success => res,
-                            Failure(e) => Err(e),
-                            Invalid => unreachable!(),
-                        }
-                    }
+                    Invalid => unreachable!(),
                 },
             },
         },
-    }
+    };
+    prev_arr[index] = pixel;
+    res
 }
 
-pub fn encode<'a>(header: &Header, pixels: &[u8], buffer: &mut [u8]) -> Result<usize, EncodeError> {
-    let pixels_size = header.pixel_len();
-    let mut pixels = match BufIter::from(pixels, ..pixels_size) {
+pub fn encode<'a>(
+    header: &Header,
+    pixels: &[Pixel],
+    buffer: &mut [u8],
+) -> Result<usize, EncodeError> {
+    let pixel_amount = header.pixel_amount();
+    let mut pixels = match BufIter::from(pixels, ..pixel_amount) {
         None => Err(MissingPixels {
-            expected_size: pixels_size,
+            expected_size: pixel_amount,
             received_size: pixels.len(),
         }),
         Some(pixels) => Ok(pixels),
@@ -269,8 +273,8 @@ pub fn encode<'a>(header: &Header, pixels: &[u8], buffer: &mut [u8]) -> Result<u
     let mut is_first = true;
 
     encode_header(header, &mut buffer)?;
-    while pixels.idx() < pixels_size {
-        let is_last = pixels.idx() == pixels_size - header.bytes_per_pixel();
+    while pixels.idx() < pixel_amount {
+        let is_last = pixels.idx() == pixel_amount - 1;
         prev_pixel = encode_pixel(
             header,
             &mut pixels,
@@ -289,7 +293,7 @@ pub fn encode<'a>(header: &Header, pixels: &[u8], buffer: &mut [u8]) -> Result<u
     Ok(buffer.idx())
 }
 
-pub fn encode_allocated(header: &Header, pixels: &[u8]) -> Result<Vec<u8>, EncodeError> {
+pub fn encode_allocated(header: &Header, pixels: &[Pixel]) -> Result<Vec<u8>, EncodeError> {
     let mut buffer = vec![0; header.max_size()];
     let out_size = encode(header, pixels, &mut buffer)?;
     buffer.truncate(out_size);

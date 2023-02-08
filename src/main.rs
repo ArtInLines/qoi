@@ -6,8 +6,19 @@ use std::path::Path;
 fn main() {
     let fpath = Path::new("./foo.qoi");
 
-    let mut pixels: [u8; 18] = [
-        255, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0, 255, 0, 0,
+    let red = Pixel {
+        r: 255,
+        g: 0,
+        b: 0,
+        a: 255,
+    };
+    let mut pixels: [Pixel; 6] = [
+        red.clone(),
+        red.clone(),
+        red.clone(),
+        red.clone(),
+        red.clone(),
+        red.clone(),
     ];
     let header = Header::new(3, 2, ColorChannel::RGB, ColorSpace::LINEAR);
     write(fpath, &header, &mut pixels).unwrap();
