@@ -113,23 +113,22 @@ fn try_op_run(
         // See https://github.com/phoboslab/qoi/issues/258
         Invalid
     } else if pixel == *prev_pixel {
+        let res = if *run == 0 {
+            buffer.set_next_one(OP_RUN | *run)
+        } else {
+            buffer.set_current(OP_RUN | *run)
+        };
+        if res.is_none() {
+            return Failure(EncodeError::buffer_too_small(header, buffer));
+        }
+
         *run += 1;
         if *run == 62 || is_last {
-            if let None = buffer.set_next_one(OP_RUN | (*run - 1)) {
-                return Failure(EncodeError::buffer_too_small(header, buffer));
-            }
             *run = 0;
         }
         Success
-    } else if *run > 0 {
-        match buffer.set_next_one(OP_RUN | (*run - 1)) {
-            None => Failure(EncodeError::buffer_too_small(header, buffer)),
-            Some(_) => {
-                *run = 0;
-                Success
-            }
-        }
     } else {
+        *run = 0;
         Invalid
     }
 }
@@ -266,7 +265,7 @@ pub fn encode<'a>(
     }?;
     let mut buffer = MutBufIter::new(buffer);
 
-    let mut prev_arr = [Pixel::def(); PREV_ARR_SIZE];
+    let mut prev_arr = [Pixel::zero(); PREV_ARR_SIZE];
     let mut prev_pixel = Pixel::def();
     let mut run = 0;
     let mut is_first = true;

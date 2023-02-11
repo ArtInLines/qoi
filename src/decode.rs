@@ -151,7 +151,7 @@ fn decode_header(buffer: &[u8]) -> Result<Header, DecodeError> {
 
 fn get_prev_pixel<'a>(pixels: &MutBufIter<'a, Pixel>) -> Pixel {
     match pixels.look_one_backward() {
-        None => Pixel::default(),
+        None => Pixel::def(),
         Some(pixel) => *pixel,
     }
 }
@@ -295,7 +295,7 @@ fn decode_pixels<'a>(
 pub fn decode<'a>(buffer: &[u8], pixels: &mut [Pixel]) -> Result<Header, DecodeError> {
     let header = decode_header(buffer)?;
     let pixel_amount = header.pixel_amount();
-    let mut prev_pixels = [Pixel::def(); PREV_ARR_SIZE];
+    let mut prev_pixels = [Pixel::zero(); PREV_ARR_SIZE];
 
     let mut pixels = match MutBufIter::from(pixels, ..pixel_amount) {
         None => Err(DecodeError::PixelBufferTooSmall {
@@ -313,7 +313,7 @@ pub fn decode<'a>(buffer: &[u8], pixels: &mut [Pixel]) -> Result<Header, DecodeE
 pub fn decode_allocated<'a>(buffer: &[u8]) -> Result<(Header, Vec<Pixel>), DecodeError> {
     let header = decode_header(buffer)?;
     let pixel_amount = header.pixel_amount();
-    let mut prev_pixels = [Pixel::def(); PREV_ARR_SIZE];
+    let mut prev_pixels = [Pixel::zero(); PREV_ARR_SIZE];
 
     let mut pixels_vec = vec![Pixel::def(); pixel_amount];
     let mut pixels = match MutBufIter::from(&mut pixels_vec, ..pixel_amount) {

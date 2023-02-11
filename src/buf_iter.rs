@@ -174,6 +174,16 @@ pub trait SliceIterMut<T: Copy>: SliceIter<T> + MutBufIterType<T> {
         *el = next;
         Some(el)
     }
+
+    fn set_current(&mut self, val: T) -> Option<&mut T> {
+        let (idx, buf, _) = self.full_mut();
+        if *idx <= 0 {
+            None
+        } else {
+            buf[*idx - 1] = val;
+            Some(&mut buf[*idx - 1])
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]

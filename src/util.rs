@@ -65,11 +65,42 @@ impl Pixel {
             a: 255,
         }
     }
+
+    pub const fn zero() -> Self {
+        Pixel {
+            r: 0,
+            g: 0,
+            b: 0,
+            a: 0,
+        }
+    }
 }
 
 impl Default for Pixel {
     fn default() -> Self {
         Pixel::def()
+    }
+}
+
+impl From<[u8; 4]> for Pixel {
+    fn from(value: [u8; 4]) -> Self {
+        Pixel {
+            r: value[0],
+            g: value[1],
+            b: value[2],
+            a: value[3],
+        }
+    }
+}
+
+impl From<[u8; 3]> for Pixel {
+    fn from(value: [u8; 3]) -> Self {
+        Pixel {
+            r: value[0],
+            g: value[1],
+            b: value[2],
+            a: 255,
+        }
     }
 }
 
