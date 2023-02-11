@@ -154,24 +154,13 @@ fn try_op_index(
 fn try_op_diff_luma(
     header: &Header,
     pixel: Pixel,
-    index: usize,
     buffer: &mut MutBufIter<u8>,
-    prev_arr: &[Pixel; PREV_ARR_SIZE],
     prev_pixel: &Pixel,
 ) -> EncodeAttemptRes {
     if pixel.a == prev_pixel.a {
-        let dr = pixel
-            .r
-            .wrapping_sub(prev_arr[index].r)
-            .wrapping_add(DIFF_BIAS);
-        let dg = pixel
-            .g
-            .wrapping_sub(prev_arr[index].g)
-            .wrapping_add(DIFF_BIAS);
-        let db = pixel
-            .b
-            .wrapping_sub(prev_arr[index].b)
-            .wrapping_add(DIFF_BIAS);
+        let dr = pixel.r.wrapping_sub(prev_pixel.r).wrapping_add(DIFF_BIAS);
+        let dg = pixel.g.wrapping_sub(prev_pixel.g).wrapping_add(DIFF_BIAS);
+        let db = pixel.b.wrapping_sub(prev_pixel.b).wrapping_add(DIFF_BIAS);
 
         if dr <= 3 && dg <= 3 && db <= 3 {
             return match buffer.set_next_one(OP_DIFF | (dr << 4) | (dg << 2) | (db << 0)) {
@@ -247,7 +236,7 @@ fn encode_pixel<'a>(
         Invalid => match try_op_index(header, pixel, index, buffer, prev_arr) {
             Success => res,
             Failure(e) => Err(e),
-            Invalid => match try_op_diff_luma(header, pixel, index, buffer, prev_arr, prev_pixel) {
+            Invalid => match try_op_diff_luma(header, pixel, buffer, prev_pixel) {
                 Success => res,
                 Failure(e) => Err(e),
                 Invalid => match try_op_pixel(header, pixel, prev_pixel, buffer) {
