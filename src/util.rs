@@ -8,7 +8,47 @@ pub struct Pixel {
     pub a: u8,
 }
 
+// Function implementation taken from https://github.com/KokaKiwi/rust-hex
+const fn hex_val(c: u8) -> u8 {
+    match c {
+        b'A'..=b'F' => c - b'A' + 10,
+        b'a'..=b'f' => c - b'a' + 10,
+        b'0'..=b'9' => c - b'0',
+        _ => panic!("Unable to parse hex-value from given byte"),
+    }
+}
+
 impl Pixel {
+    pub fn from_hex(hex: &str) -> Self {
+        match hex.len() {
+			3 => Pixel {
+				r: 17 * hex_val(hex.bytes().nth(0).unwrap()),
+				g: 17 * hex_val(hex.bytes().nth(1).unwrap()),
+				b: 17 * hex_val(hex.bytes().nth(2).unwrap()),
+				a: 255,
+			},
+			4 => Pixel {
+				r: 17 * hex_val(hex.bytes().nth(0).unwrap()),
+				g: 17 * hex_val(hex.bytes().nth(1).unwrap()),
+				b: 17 * hex_val(hex.bytes().nth(2).unwrap()),
+				a: 17 * hex_val(hex.bytes().nth(3).unwrap()),
+			},
+			6 => Pixel {
+				r: 16 * hex_val(hex.bytes().nth(0).unwrap()) + hex_val(hex.bytes().nth(1).unwrap()),
+				g: 16 * hex_val(hex.bytes().nth(2).unwrap()) + hex_val(hex.bytes().nth(3).unwrap()),
+				b: 16 * hex_val(hex.bytes().nth(4).unwrap()) + hex_val(hex.bytes().nth(5).unwrap()),
+				a: 255,
+			},
+			8 => Pixel {
+				r: 16 * hex_val(hex.bytes().nth(0).unwrap()) + hex_val(hex.bytes().nth(1).unwrap()),
+				g: 16 * hex_val(hex.bytes().nth(2).unwrap()) + hex_val(hex.bytes().nth(3).unwrap()),
+				b: 16 * hex_val(hex.bytes().nth(4).unwrap()) + hex_val(hex.bytes().nth(5).unwrap()),
+				a: 16 * hex_val(hex.bytes().nth(6).unwrap()) + hex_val(hex.bytes().nth(7).unwrap()),
+			},
+			_ => panic!("Unable to parse Pixel values from a hex-string that isn't 3,4,6 or 8 characters long"),
+		}
+    }
+
     pub fn pixel_hash(&self) -> usize {
         let r = self.r as usize;
         let g = self.g as usize;
@@ -125,7 +165,7 @@ impl From<ColorSpace> for u8 {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Header {
     pub width: u32,
     pub height: u32,
