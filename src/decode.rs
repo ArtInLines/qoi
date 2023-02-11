@@ -253,7 +253,10 @@ fn decode_pixels<'a>(
                         match buffer.step_forward(step) {
                             None => Err(DecodeError::missing_pixels(header, pixels)),
                             Some(bytes) => {
-                                let px = bytes.into();
+                                let mut px: Pixel = bytes.into();
+                                if byte == OP_RGB {
+                                    px.a = get_prev_pixel(pixels).a;
+                                }
                                 match pixels.set_next_one(px) {
                                     None => {
                                         Err(DecodeError::pixel_buffer_too_small(header, pixels))

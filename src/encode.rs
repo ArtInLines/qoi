@@ -194,19 +194,29 @@ fn try_op_diff_luma(
     Invalid
 }
 
-fn try_op_pixel(header: &Header, pixel: Pixel, buffer: &mut MutBufIter<u8>) -> EncodeAttemptRes {
-    match buffer.step_forward_mut(header.max_bytes_per_pixel()) {
-        None => Failure(EncodeError::buffer_too_small(header, buffer)),
-        Some(bytes) => {
-            match header.channels {
-                ColorChannel::RGB => bytes[0] = OP_RGB,
-                ColorChannel::RGBA => {
-                    bytes[0] = OP_RGBA;
-                    bytes[4] = pixel.a;
-                }
-            };
-            bytes[1..4].copy_from_slice(&[pixel.r, pixel.g, pixel.b]);
-            Success
+fn try_op_pixel(
+    header: &Header,
+    pixel: Pixel,
+    prev_pixel: &Pixel,
+    buffer: &mut MutBufIter<u8>,
+) -> EncodeAttemptRes {
+    if header.channels == ColorChannel::RGB || prev_pixel.a == pixel.a {
+        match buffer.step_forward_mut(4) {
+            None => Failure(EncodeError::buffer_too_small(header, buffer)),
+            Some(bytes) => {
+                bytes[0] = OP_RGB;
+                bytes[1..4].copy_from_slice(&[pixel.r, pixel.g, pixel.b]);
+                Success
+            }
+        }
+    } else {
+        match buffer.step_forward_mut(5) {
+            None => Failure(EncodeError::buffer_too_small(header, buffer)),
+            Some(bytes) => {
+                bytes[0] = OP_RGBA;
+                bytes[1..5].copy_from_slice(&[pixel.r, pixel.g, pixel.b, pixel.a]);
+                Success
+            }
         }
     }
 }
@@ -240,7 +250,7 @@ fn encode_pixel<'a>(
             Invalid => match try_op_diff_luma(header, pixel, index, buffer, prev_arr, prev_pixel) {
                 Success => res,
                 Failure(e) => Err(e),
-                Invalid => match try_op_pixel(header, pixel, buffer) {
+                Invalid => match try_op_pixel(header, pixel, prev_pixel, buffer) {
                     Success => res,
                     Failure(e) => Err(e),
                     Invalid => unreachable!(),
