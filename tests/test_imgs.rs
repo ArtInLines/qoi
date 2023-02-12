@@ -16,16 +16,18 @@ fn test_decoder() {
     let mut decoded_buf = Vec::<u8>::new();
     decoded_file.read_to_end(&mut decoded_buf).unwrap();
 
+    println!("Decoded Buffer Length: {}", decoded_buf.len());
+
     let mut encoded_buf = Vec::<u8>::new();
     encoded_file.read_to_end(&mut encoded_buf).unwrap();
 
-    let decoded_pixels: Vec<qoi::Pixel> = decoded_buf.chunks(3).map(|chunk| chunk.into()).collect();
+    let decoded_pixels: Vec<qoi::Pixel> = decoded_buf.chunks(4).map(|chunk| chunk.into()).collect();
 
     let decoded_header = qoi::Header {
         width: 256,
         height: 256,
-        channels: qoi::ColorChannel::RGB,
-        colorspace: qoi::ColorSpace::LINEAR,
+        channels: qoi::ColorChannel::RGBA,
+        colorspace: qoi::ColorSpace::SRGB,
     };
 
     let (header, pixels) = qoi::decode::decode_allocated(&encoded_buf).unwrap();
@@ -52,11 +54,11 @@ fn test_encoder() {
     let header = qoi::Header {
         width: 256,
         height: 256,
-        channels: qoi::ColorChannel::RGB,
-        colorspace: qoi::ColorSpace::LINEAR,
+        channels: qoi::ColorChannel::RGBA,
+        colorspace: qoi::ColorSpace::SRGB,
     };
 
-    let pixels: Vec<qoi::Pixel> = decoded_buf.chunks(3).map(|chunk| chunk.into()).collect();
+    let pixels: Vec<qoi::Pixel> = decoded_buf.chunks(4).map(|chunk| chunk.into()).collect();
 
     let res = qoi::encode::encode_allocated(&header, &pixels).unwrap();
 
