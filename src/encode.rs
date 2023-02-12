@@ -168,9 +168,20 @@ fn try_op_diff_luma(
             };
         }
 
-        let dg = dg.wrapping_add(LUMA_GREEN_BIAS - DIFF_BIAS);
-        let dr = dr.wrapping_sub(dg).wrapping_add(LUMA_BIAS);
-        let db = db.wrapping_sub(dg).wrapping_add(LUMA_BIAS);
+        // OP_DIFF didn't work, try OP_LUMA instead
+
+        let dg = pixel.g.wrapping_sub(prev_pixel.g);
+        let dr = pixel
+            .r
+            .wrapping_sub(prev_pixel.r)
+            .wrapping_sub(dg)
+            .wrapping_add(LUMA_BIAS);
+        let db = pixel
+            .b
+            .wrapping_sub(prev_pixel.b)
+            .wrapping_sub(dg)
+            .wrapping_add(LUMA_BIAS);
+        let dg = dg.wrapping_add(LUMA_GREEN_BIAS);
 
         if dg <= 63 && dr <= 15 && db <= 15 {
             return match buffer.set_next(&[OP_LUMA | dg, (dr << 4) | (db << 0)]) {

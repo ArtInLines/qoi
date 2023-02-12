@@ -161,11 +161,13 @@ pub trait SliceIterMut<T: Copy>: SliceIter<T> + MutBufIterType<T> {
 
     fn set_next(&mut self, next: &[T]) -> Option<usize> {
         let (idx, buf, _) = self.full_mut();
-        if buf.len() - *idx < next.len() {
+        let len = next.len();
+        if buf.len() - *idx < len {
             None
         } else {
-            buf[*idx..*idx + next.len()].copy_from_slice(next);
-            Some(next.len())
+            buf[*idx..*idx + len].copy_from_slice(next);
+            *idx += len;
+            Some(len)
         }
     }
 
